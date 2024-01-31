@@ -38,9 +38,11 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--max_epoch', type=int, default=150)
-    parser.add_argument('--save_interval', type=int, default=5)
+    parser.add_argument('--save_interval', type=int, default=10)
     parser.add_argument('--ignore_tags', type=list, default=['masked', 'excluded-region', 'maintable', 'stamp'])
     parser.add_argument('--seed', type=int, default=666)
+    parser.add_argument('--resume', type=bool, default=False)
+    parser.add_argument('--resume_pth', type=str, default='train_serial/150.pth')
 
     args = parser.parse_args()
 
@@ -65,7 +67,8 @@ def denormalize(image, mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)):
     return denormalized_image
 
 def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
-                learning_rate, max_epoch, save_interval, ignore_tags, seed):
+                learning_rate, max_epoch, save_interval, ignore_tags, seed, resume, resume_pth):
+    
     dataset = SceneTextDataset(
         data_dir,
         split='train',
@@ -86,9 +89,15 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
     model = EAST()
     model.to(device)
     
-    
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[50, 100, 140], gamma=0.1)
+    
+    if resume:
+        checkpoint = torch.load(os.path.join(model_dir, resume_pth))
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+    
     train_serial = datetime.now().strftime("%Y%m%d_%H%M%S")
     model.train()
     for epoch in range(max_epoch):
@@ -114,16 +123,20 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                 
                 # visualization
                 vis_info = extra_info.copy()
+                score_thr = 0.9
                 smap_to_log = [wandb.Image(smap.detach().cpu().numpy().transpose(1, 2, 0).squeeze()) for smap in vis_info['score_map']]
-                geo_t_to_log = [wandb.Image(geo.detach().cpu().numpy().transpose(1, 2, 0)[:, :, 0]) for geo in vis_info['geo_map']]
-                geo_b_to_log = [wandb.Image(geo.detach().cpu().numpy().transpose(1, 2, 0)[:, :, 1]) for geo in vis_info['geo_map']]
-                geo_l_to_log = [wandb.Image(geo.detach().cpu().numpy().transpose(1, 2, 0)[:, :, 2]) for geo in vis_info['geo_map']]
-                geo_r_to_log = [wandb.Image(geo.detach().cpu().numpy().transpose(1, 2, 0)[:, :, 3]) for geo in vis_info['geo_map']]
+                center_mask = [(smap.detach().cpu().numpy().transpose(1, 2, 0).squeeze()) > score_thr for smap in vis_info['score_map']]
+                geo_t_to_log = [wandb.Image(geo.detach().cpu().numpy().transpose(1, 2, 0)[:, :, 0] * cm) for geo, cm in zip(vis_info['geo_map'], center_mask)]
+                geo_b_to_log = [wandb.Image(geo.detach().cpu().numpy().transpose(1, 2, 0)[:, :, 1] * cm) for geo, cm in zip(vis_info['geo_map'], center_mask)]
+                geo_l_to_log = [wandb.Image(geo.detach().cpu().numpy().transpose(1, 2, 0)[:, :, 2] * cm) for geo, cm in zip(vis_info['geo_map'], center_mask)]
+                geo_r_to_log = [wandb.Image(geo.detach().cpu().numpy().transpose(1, 2, 0)[:, :, 3] * cm) for geo, cm in zip(vis_info['geo_map'], center_mask)]
                 denormalized_images = [denormalize(image) for image in img]
                 images_to_log = [wandb.Image(image.permute(1, 2, 0).cpu().numpy()) for image in denormalized_images]
                 
-                table = wandb.Table(columns=["train_img", "score_map", "geo_top", "geo_bottom", "geo_left", "geo_right"],
-                                    data=[[i,s,gt,gb,gl,gr] for i,s,gt,gb,gl,gr in zip(images_to_log, smap_to_log, geo_t_to_log, geo_b_to_log, geo_l_to_log, geo_r_to_log)])
+                table = wandb.Table(
+                    columns=["train_img", "score_map", "geo_top", "geo_bottom", "geo_left", "geo_right"],
+                    data=[[i,s,gt,gb,gl,gr] for i,s,gt,gb,gl,gr in zip(images_to_log, smap_to_log, geo_t_to_log, geo_b_to_log, geo_l_to_log, geo_r_to_log)]
+                    )
                 wandb.log({'Train Loss': loss_val, 'Cls Loss': extra_info['cls_loss'],
                     'Angle Loss': extra_info['angle_loss'], 'IoU Loss': extra_info['iou_loss'],
                     'Train Images': table})
@@ -152,7 +165,6 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
 def main(args):
     do_training(**args.__dict__)
 
-
 if __name__ == '__main__':
     args = parse_args()
     
@@ -162,6 +174,7 @@ if __name__ == '__main__':
     torch.cuda.manual_seed_all(args.seed)
     
     wandb.init(project="CV06_Data_Centric",
+               entity="innovation-vision-tech",
                name="test",
                notes="",
                config={
