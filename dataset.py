@@ -10,6 +10,11 @@ import albumentations as A
 from torch.utils.data import Dataset
 from shapely.geometry import Polygon
 from albumentations.augmentations.geometric.resize import LongestMaxSize
+from random import randint
+import copy
+
+from utils.setting_seed import *
+setting_seed(666)
 
 
 def cal_distance(x1, y1, x2, y2):
@@ -273,6 +278,64 @@ def resize_img(img, vertices, size):
     new_vertices = vertices * ratio
     return img, new_vertices
 
+def resize_img_ratio(img, vertices, ratio_list):
+    '''
+    random resize of image
+    '''
+    h, w = img.height, img.width
+    idx = randint(0, len(ratio_list)-1)
+    ratio = ratio_list[idx]
+    img = img.resize((int(w * ratio), int(h * ratio)), Image.BILINEAR)
+    new_vertices = vertices * ratio
+    return img, new_vertices
+
+def salt_pepper(img):
+    '''
+    확률적으로 salt_pepper 를 주어 노이즈를 추가함
+    '''
+    p = randint(0, 3)
+    if p >= 1:
+        return img
+    
+    # Getting the dimensions of the image
+    if img.ndim > 2:  # color
+        height, width, _ = img.shape
+    else:  # gray scale
+        height, width = img.shape
+
+    result = copy.deepcopy(img)
+
+    # Randomly pick some pixels in the image
+    # Pick a random number between height*width/80 and height*width/10
+    number_of_pixels = randint(int(height * width / 100), int(height * width / 10))
+
+    for i in range(number_of_pixels):
+        # Pick a random y coordinate
+        y_coord = randint(0, height - 1)
+
+        # Pick a random x coordinate
+        x_coord = randint(0, width - 1)
+
+        if result.ndim > 2:
+            result[y_coord][x_coord] = [randint(0, 70), randint(0, 70), randint(0, 70)]
+        else:
+            # Color that pixel to white
+            result[y_coord][x_coord] = 255
+
+    for i in range(number_of_pixels):
+        # Pick a random y coordinate
+        y_coord = randint(0, height - 1)
+
+        # Pick a random x coordinate
+        x_coord = randint(0, width - 1)
+
+        if result.ndim > 2:
+            result[y_coord][x_coord] = [randint(0, 255), randint(0, 255), randint(0, 255)]
+        else:
+            # Color that pixel to white
+            result[y_coord][x_coord] = 0
+
+    return result
 
 def adjust_height(img, vertices, ratio=0.2):
     '''adjust height of image to aug data
@@ -398,9 +461,11 @@ class SceneTextDataset(Dataset):
 
         image = Image.open(image_fpath)
         image, vertices = resize_img(image, vertices, self.image_size)
+        image, vertices = resize_img_ratio(image, vertices, [1.0, 0.75, 0.5])
         image, vertices = adjust_height(image, vertices)
         image, vertices = rotate_img(image, vertices)
         image, vertices = crop_img(image, vertices, labels, self.crop_size)
+        image = salt_pepper(image)
 
         if image.mode != 'RGB':
             image = image.convert('RGB')

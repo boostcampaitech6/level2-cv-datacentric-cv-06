@@ -21,6 +21,9 @@ import numpy as np
 import wandb
 from datetime import datetime
 
+from utils.setting_seed import *
+setting_seed(666)
+
 def parse_args():
     parser = ArgumentParser()
 
@@ -95,8 +98,8 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
     if resume:
         checkpoint = torch.load(os.path.join(model_dir, resume_pth))
         model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        #optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        #scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
     
     train_serial = datetime.now().strftime("%Y%m%d_%H%M%S")
     model.train()
@@ -168,14 +171,9 @@ def main(args):
 if __name__ == '__main__':
     args = parse_args()
     
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
-    
     wandb.init(project="CV06_Data_Centric",
                entity="innovation-vision-tech",
-               name="test",
+               name="add train mulit_scale_ 1000 epoch",
                notes="",
                config={
                     "batch_size": args.batch_size,
