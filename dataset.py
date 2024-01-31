@@ -293,17 +293,13 @@ def salt_pepper(img):
     '''
     확률적으로 salt_pepper 를 주어 노이즈를 추가함
     '''
-    p = randint(0, 3)
+    p = randint(0, 4)
     if p >= 1:
         return img
     
-    # Getting the dimensions of the image
-    if img.ndim > 2:  # color
-        height, width, _ = img.shape
-    else:  # gray scale
-        height, width = img.shape
-
+    height, width = img.height, img.width
     result = copy.deepcopy(img)
+    result = np.array(result)
 
     # Randomly pick some pixels in the image
     # Pick a random number between height*width/80 and height*width/10
@@ -316,11 +312,7 @@ def salt_pepper(img):
         # Pick a random x coordinate
         x_coord = randint(0, width - 1)
 
-        if result.ndim > 2:
-            result[y_coord][x_coord] = [randint(0, 70), randint(0, 70), randint(0, 70)]
-        else:
-            # Color that pixel to white
-            result[y_coord][x_coord] = 255
+        result[y_coord][x_coord] = [randint(0, 70), randint(0, 70), randint(0, 70)]
 
     for i in range(number_of_pixels):
         # Pick a random y coordinate
@@ -329,11 +321,7 @@ def salt_pepper(img):
         # Pick a random x coordinate
         x_coord = randint(0, width - 1)
 
-        if result.ndim > 2:
-            result[y_coord][x_coord] = [randint(0, 255), randint(0, 255), randint(0, 255)]
-        else:
-            # Color that pixel to white
-            result[y_coord][x_coord] = 0
+        result[y_coord][x_coord] = [randint(0, 255), randint(0, 255), randint(0, 255)]
 
     return result
 
@@ -465,10 +453,11 @@ class SceneTextDataset(Dataset):
         image, vertices = adjust_height(image, vertices)
         image, vertices = rotate_img(image, vertices)
         image, vertices = crop_img(image, vertices, labels, self.crop_size)
-        image = salt_pepper(image)
 
         if image.mode != 'RGB':
             image = image.convert('RGB')
+    
+        image = salt_pepper(image)
         image = np.array(image)
 
         funcs = []

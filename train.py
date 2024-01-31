@@ -93,13 +93,14 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
     model.to(device)
     
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[50, 100, 140], gamma=0.1)
+    #scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[50, 100, 140], gamma=0.1)
+    scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=50, eta_min=1e-6)
     
     if resume:
         checkpoint = torch.load(os.path.join(model_dir, resume_pth))
         model.load_state_dict(checkpoint['model_state_dict'])
-        #optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        #scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
     
     train_serial = datetime.now().strftime("%Y%m%d_%H%M%S")
     model.train()
@@ -141,8 +142,11 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                     data=[[i,s,gt,gb,gl,gr] for i,s,gt,gb,gl,gr in zip(images_to_log, smap_to_log, geo_t_to_log, geo_b_to_log, geo_l_to_log, geo_r_to_log)]
                     )
                 wandb.log({'Train Loss': loss_val, 'Cls Loss': extra_info['cls_loss'],
-                    'Angle Loss': extra_info['angle_loss'], 'IoU Loss': extra_info['iou_loss'],
-                    'Train Images': table})
+                    'Angle Loss': extra_info['angle_loss'], 'IoU Loss': extra_info['iou_loss']})
+                
+                # 맨처음 이후 10 epcoh 마다 이미지 표시
+                if epoch == 0 or (epoch + 1) % 10 == 0:
+                    wandb.log({'Train Images': table})
 
         scheduler.step()
 
@@ -173,7 +177,7 @@ if __name__ == '__main__':
     
     wandb.init(project="CV06_Data_Centric",
                entity="innovation-vision-tech",
-               name="add train mulit_scale_ 1000 epoch",
+               name="add train cosineAnLR mulit_scale_noise after 1000 epoch",
                notes="",
                config={
                     "batch_size": args.batch_size,
