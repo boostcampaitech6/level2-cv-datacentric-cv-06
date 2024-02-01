@@ -21,7 +21,7 @@ def main(args):
     prediction = f'/data/ephemeral/home/level2-cv-datacentric-cv-06/predictions/{args.train_serial}/{args.output}'
     data = read_json(prediction)
 
-    img_dir = '../data/medical/img/test'
+    img_dir = '../../data/medical/img/test'
     save_dir = f'/data/ephemeral/home/level2-cv-datacentric-cv-06/predictions/{args.train_serial}/img'
     os.makedirs(save_dir, exist_ok=True)
     img_list = os.listdir(img_dir)
