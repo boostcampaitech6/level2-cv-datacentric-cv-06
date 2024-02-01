@@ -41,7 +41,8 @@ def parse_args():
 
 
 def do_inference(model, ckpt_fpath, data_dir, input_size, batch_size, split='test'):
-    model.load_state_dict(torch.load(ckpt_fpath, map_location='cpu'))
+    checkpoint = torch.load(ckpt_fpath, map_location='cpu')
+    model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
 
     image_fnames, by_sample_bboxes = [], []
@@ -73,8 +74,8 @@ def main(args):
     # Get paths to checkpoint files
     ckpt_fpath = osp.join(args.model_dir, args.train_serial, f'{args.pth}.pth')
 
-    if not osp.exists(args.output_dir, args.train_serial):
-        os.makedirs(args.output_dir, args.train_serial)
+    if not osp.exists(os.path.join(args.output_dir, args.train_serial)):
+        os.makedirs(os.path.join(args.output_dir, args.train_serial))
 
     print('Inference in progress')
 
